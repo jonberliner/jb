@@ -5,6 +5,7 @@ import pdb
 def ph(shape, dtype=tf.float32, name=None):
     return tf.placeholder(dtype, shape, name=name)
 
+
 def batch_norm(n_out, input_rank, phase_train, beta_trainable=True, gamma_trainable=True, scope='bn'):
     """
         n_out:       integer, depth of input maps
@@ -98,7 +99,7 @@ def prelu(_x):
 
 
 def mlp(sizes, act_fn=tf.nn.relu, bn=None):
-    linears = [linear(sizes[li], sizes[li+1]) for li in xrange(len(sizes)-1)]
+    linears = [linear(sizes[li], sizes[li+1]) for li in range(len(sizes)-1)]
 
     def call(x):
         activations = []
