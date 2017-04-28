@@ -10,12 +10,14 @@ class Logger(object):
     def __init__(self, fname):
         # set up log file
         # LOG_NAME = 'inverted_mnist_v3_' + timestamp()
-        self._logger = logging.basicConfig(level=logging.DEBUG, filename=fname, filemode="a+",
+        import logging
+        self._logger = logging
+        logging.basicConfig(level=logging.DEBUG, filename=fname, filemode="a+",
                             format="%(asctime)-15s %(levelname)-8s %(message)s")
-        self._handler = logging.getLogger().addHandler(logging.StreamHandler())
+        logging.getLogger().addHandler(logging.StreamHandler())
 
     def log(self, string):
-        self._handler.info(string)
+        self._logger.info(string)
 
 
 def logger(fname):
