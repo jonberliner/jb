@@ -6,6 +6,12 @@ import os
 import pdb
 
 
+class Bunch(dict):
+    def __init__(self, *args, **kwds):
+        super(Bunch, self).__init__(*args, **kwds)
+        self.__dict__ = self
+
+
 class Logger(object):
     def __init__(self, fname):
         # set up log file
