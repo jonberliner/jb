@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.contrib.distributions import Normal, kl
 import numpy as np
 import pdb
 
@@ -202,6 +203,8 @@ class ZeroInflated(object):
         out = tf.log(((is_zero * self.phi) + tf.exp(d_log_pmf) * (1.-self.phi))+STABILITY)
         return out
 
+    log_prob = log_pmf
+
 
 class NegativeBinomial(object):
     def __init__(self, r, p):
@@ -219,8 +222,72 @@ class NegativeBinomial(object):
                k * tf.log(self.p)
         return out
 
+    log_prob = log_pmf
+
+
 
 def hard_sigmoid(x, STABILITY=1e-6):
     return tf.clip_by_value(x*0.2 + 0.5, 0.+STABILITY, 1.-STABILITY)
 
+
+def vae(dz, encoder, decoder):
+    def call(x):
+        # x_em = linear(x)
+        # z_em = encoder(x_em)
+        qz_em = encoder(x)
+        qz_mlv = linear(static_size(qz_em, 1), dz*2)(qz_em)
+        qz_mu, qz_lv = tf.unstack(tf.reshape(qz_mlv, [-1, dz, 2]), axis=2)
+        qz_var = tf.nn.softplus(qz_lv)
+
+        z = Normal(qz_mu, qz_lv).sample()
+
+        px = decoder(z)
+        px.z = z
+        px.qz_mu = qz_mu
+        px.qz_var = qz_var
+
+        px.kl_z_qp = kl(Normal(qz_mu, qz_var), Normal(0., 1.))
+
+        px.call = call
+        return px
+    call.encoder = encoder
+    call.decoder = decoder
+    return call
+
+
+def dropout(p_keep, train_flag):
+    def call(x):
+        out = tf.cond(train_flag,
+                      lambda: (x * tf.cast(tf.random_uniform(tf.shape(x)) > p_keep, tf.float32)) / p_keep,
+                      lambda: x)
+        out.call = call
+        return out
+    return call
+
+
+def fc_layer(n_in, n_out, act_fn=tf.identity, bn=False, p_keep=None, train_flag=None):
+    if bn or p_keep: assert train_flag is not None
+
+    lin = linear(n_in, n_out)
+    bn = batch_norm(n_out, 2, train_flag) if bn else tf.identity
+    drop = dropout(p_keep, train_flag) if p_keep else tf.identity
+
+    def call(x):
+        out = pre_act = lin(x)
+        out = bn_pre_act = bn(out)
+        out = act = act_fn(out)
+        out = _drop = drop(out)
+
+        out.pre_act = pre_act
+        out.bn_pre_act = bn_pre_act
+        out.act = act
+        out.drop = _drop
+        out.call = call
+        return out
+
+    call.lin = lin
+    call.bn = bn
+    call.act_fn = act_fn
+    call.drop = drop
+    return call
 
