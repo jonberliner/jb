@@ -258,7 +258,7 @@ def vae(dz, encoder, decoder):
 def dropout(p_keep, train_flag):
     def call(x):
         out = tf.cond(train_flag,
-                      lambda: (x * tf.cast(tf.random_uniform(tf.shape(x)) > p_keep, tf.float32)) / p_keep,
+                      lambda: (x * tf.cast(tf.random_uniform(tf.shape(x)) < p_keep, tf.float32)) / p_keep,
                       lambda: x)
         out.call = call
         return out
