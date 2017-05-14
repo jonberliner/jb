@@ -29,9 +29,8 @@ class Module(object):
         self.output_shape = None
         self.called = False
 
-    def __call__(self, train_flag=train_flag):
+    def __call__(self):
         self.called = True
-        self.train_flag = train_flag
 
 
 class SameShape(Module):
@@ -40,7 +39,6 @@ class SameShape(Module):
         self.input_shape = x.get_shape()
         self.output_shape = x.get_shape()
         super(SameShape, self).__call__()
-
 
 
 class Linear(Module):
@@ -221,7 +219,7 @@ class MLP(Stack):
 
         if type(bn) != list:
             bn = [bn] * self.n_layer
-            if self.readout: bn[-1] = None
+            if self.readout: bn[-1] = False
         self.bn = bn
 
         if type(p_drop) != list:
