@@ -3,6 +3,10 @@ from tensorflow.contrib.distributions import Normal, kl
 import numpy as np
 import pdb
 
+def ph(shape, dtype=tf.float32, name=None):
+    return tf.placeholder(dtype=dtype, shape=shape, name=name)
+
+
 # from https://stats.stackexchange.com/questions/228704/how-does-one-initialize-neural-networks-as-suggested-by-saxe-et-al-using-orthogo
 def orthogonal_initializer(scale = 1.1):
     ''' From Lasagne and Keras. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
