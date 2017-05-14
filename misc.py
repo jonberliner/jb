@@ -17,7 +17,7 @@ def test_model(x, train_flag_ph):
     return yhat_logit
 
 
-def test_over_mnist(model, linear_read_in=False, linear_read_out=False):
+def test_over_mnist(model, train_flag_ph=None, linear_read_in=False, linear_read_out=False):
     # TODO: make read in/out magic available
     assert linear_read_in == False
     assert linear_read_out == False
@@ -29,7 +29,8 @@ def test_over_mnist(model, linear_read_in=False, linear_read_out=False):
     DX = dat.train.images.shape[1]
     DY = dat.train.labels.shape[1]
 
-    train_flag_ph = tf.placeholder(tf.bool)
+    if train_flag_ph is None: 
+        train_flag_ph = tf.placeholder(tf.bool)
     x_ph = tf.placeholder(tf.float32, (None, DX))
     y_ph = tf.placeholder(tf.float32, (None, DY))
 
