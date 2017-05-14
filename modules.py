@@ -116,9 +116,6 @@ def lrelu(_x, alphas=5.5, name='lrelu'):
 
 def prelu(_x):
   alphas = tf.Variable(tf.zeros(_x.get_shape()[-1], dtype=tf.float32))
-  # alphas = tf.get_variable('alpha', _x.get_shape()[-1],
-  #                      initializer=tf.constant_initializer(0.0),
-  #                      dtype=tf.float32)
   pos = tf.nn.relu(_x)
   neg = alphas * (_x - abs(_x)) * 0.5
   return pos + neg
