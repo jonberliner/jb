@@ -46,7 +46,7 @@ class SameShape(Module):
 
 
 class Linear(Module):
-    def __init__(self, n_out, W_init='msra', name='linear'):
+    def __init__(self, n_out, W_init='msra', name='Linear'):
         super(Linear, self).__init__(name)
 
         self.n_out = n_out
@@ -68,46 +68,6 @@ class Linear(Module):
             self.b = tf.Variable(tf.zeros([self.n_out]), name='b')
 
         out = tf.matmul(x, self.W) + self.b
-        return out
-
-
-class FCLayer(Module):
-    # TODO: decide if we want to break into containers, stacks, etc
-    def __init__(self, n_out, act_fn=tf.nn.relu, bn=False, p_drop=False, name='FCLayer'):
-        super(FCLayer, self).__init__(name)
-
-        with tf.name_scope(self.name) as scope:
-            super(FCLayer, self).__init__(name)
-            self.n_out = n_out
-            self.bn = bn
-            self.p_drop = p_drop
-            self.drop = p_drop is not None
-
-            self.linear = Linear(n_out)
-            self.batch_norm = BatchNorm() if self.bn else None
-            self.act_fn = act_fn
-            self.dropout = Dropout(p_drop) if self.drop else None
-
-    def _call(self, x, train_flag=train_flag):
-        if self.called:
-            assert rank(x) == self.input_rank
-            assert static_size(x, 1) == self.n_in
-        else:
-            self.input_rank = rank(x)
-            self.input_shape = x.get_shape()
-            self.n_in = static_size(x, 1)
-
-        preact = self.linear(x)
-        bn_preact = self.batch_norm(preact) if self.bn else None
-        act = self.act_fn(bn_preact) if self.bn else self.act_fn(preact)
-        dropped = self.dropout(act) if self.drop else None
-
-        out = dropped if self.drop else act
-        out.preact = preact
-        out.bn_preact = bn_preact
-        out.act = act
-        out.dropped = dropped
-
         return out
 
 
@@ -170,6 +130,45 @@ class Dropout(SameShape):
                           lambda: (x * mask()) / (1. - self.p_drop),
                           lambda: x)
         return dropped
+
+
+class FCLayer(Module):
+    # TODO: decide if we want to break into containers, stacks, etc
+    def __init__(self, n_out, act_fn=tf.nn.relu, bn=False, p_drop=False, name='FCLayer'):
+        super(FCLayer, self).__init__(name)
+
+        with tf.name_scope(self.name) as scope:
+            self.n_out = n_out
+            self.bn = bn
+            self.p_drop = p_drop
+            self.drop = p_drop is not None
+
+            self.linear = Linear(n_out)
+            self.batch_norm = BatchNorm() if self.bn else None
+            self.act_fn = act_fn
+            self.dropout = Dropout(p_drop) if self.drop else None
+
+    def _call(self, x, train_flag=train_flag):
+        if self.called:
+            assert rank(x) == self.input_rank
+            assert static_size(x, 1) == self.n_in
+        else:
+            self.input_rank = rank(x)
+            self.input_shape = x.get_shape()
+            self.n_in = static_size(x, 1)
+
+        preact = self.linear(x)
+        bn_preact = self.batch_norm(preact) if self.bn else None
+        act = self.act_fn(bn_preact) if self.bn else self.act_fn(preact)
+        dropped = self.dropout(act) if self.drop else None
+
+        out = dropped if self.drop else act
+        out.preact = preact
+        out.bn_preact = bn_preact
+        out.act = act
+        out.dropped = dropped
+
+        return out
 
 
 class Stack(Module):
@@ -235,7 +234,7 @@ class MLP(Stack):
 
 
 class lReLU(SameShape):
-    def __init__(self, alpha=5.5, name='LReLU'):
+    def __init__(self, alpha=5.5, name='lReLU'):
         super(lReLU, self).__init__(name)
 
         self.alpha = alpha
@@ -247,7 +246,7 @@ class lReLU(SameShape):
 
 
 class pReLU(SameShape):
-    def __init__(self, name='LReLU'):
+    def __init__(self, name='pReLU'):
         super(pReLU, self).__init__(name)
 
     def _call(self, x):
