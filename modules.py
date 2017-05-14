@@ -4,7 +4,24 @@ import numpy as np
 import pdb
 
 def ph(shape, dtype=tf.float32, name=None):
-    return tf.placeholder(dtype, shape, name=name)
+    return tf.placeholder(dtype=dtype, shape=shape, name=name)
+
+
+# from https://stats.stackexchange.com/questions/228704/how-does-one-initialize-neural-networks-as-suggested-by-saxe-et-al-using-orthogo
+def orthogonal_initializer(scale = 1.1):
+    ''' From Lasagne and Keras. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
+    '''
+    print('Warning -- You have opted to use the orthogonal_initializer function')
+    def _initializer(shape, dtype=tf.float32):
+      flat_shape = (shape[0], np.prod(shape[1:]))
+      a = np.random.normal(0.0, 1.0, flat_shape)
+      u, _, v = np.linalg.svd(a, full_matrices=False)
+      # pick the one with the correct shape
+      q = u if u.shape == flat_shape else v
+      q = q.reshape(shape) #this needs to be corrected to float32
+      print('you have initialized one orthogonal matrix.')
+      return tf.constant(scale * q[:shape[0], :shape[1]], dtype=tf.float32)
+    return _initializer
 
 
 def batch_norm(n_out, input_rank, phase_train, beta_trainable=True, gamma_trainable=True, scope='bn'):
@@ -89,11 +106,16 @@ def MixtureOfGaussians(k):
     return call
 
 
+def lrelu(_x, alphas=5.5, name='lrelu'):
+    with tf.name_scope(name) as scope:
+        alphas = tf.Variable(alphas, dtype=tf.float32, trainable=False, name='alpha')
+        pos = tf.nn.relu(_x)
+        neg = alphas * (_x - abs(_x)) * 0.5
+        return pos + neg
+
+
 def prelu(_x):
   alphas = tf.Variable(tf.zeros(_x.get_shape()[-1], dtype=tf.float32))
-  # alphas = tf.get_variable('alpha', _x.get_shape()[-1],
-  #                      initializer=tf.constant_initializer(0.0),
-  #                      dtype=tf.float32)
   pos = tf.nn.relu(_x)
   neg = alphas * (_x - abs(_x)) * 0.5
   return pos + neg
@@ -290,4 +312,3 @@ def fc_layer(n_in, n_out, act_fn=tf.identity, bn=False, p_keep=None, train_flag=
     call.act_fn = act_fn
     call.drop = drop
     return call
-
