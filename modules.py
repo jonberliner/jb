@@ -1,8 +1,9 @@
 import tensorflow as tf
 from tensorflow.contrib.distributions import Normal, kl
 import numpy as np
+import pdb
 
-train_flag = tf.placeholder(tf.bool)
+train_flag = tf.placeholder(tf.bool, name='jb_train_flag')
 
 def ph(shape, dtype=tf.float32, name=None):
     return tf.placeholder(dtype=dtype, shape=shape, name=name)
@@ -126,7 +127,7 @@ class Dropout(SameShape):
 
     def _call(self, x, train_flag=train_flag):
         mask = lambda: tf.to_float(tf.random_uniform(tf.shape(x)) > self.p_drop)
-        dropped = tf.cond(train_flag, 
+        dropped = tf.cond(train_flag,
                           lambda: (x * mask()) / (1. - self.p_drop),
                           lambda: x)
         return dropped
@@ -226,9 +227,9 @@ class MLP(Stack):
 
         with tf.name_scope(self.name) as scope:
             for li in range(self.n_layer):
-                self.add(FCLayer(self.sizes[li], 
-                                self.act_fn[li], 
-                                self.bn[li], 
+                self.add(FCLayer(self.sizes[li],
+                                self.act_fn[li],
+                                self.bn[li],
                                 self.p_drop[li],
                                 name='FCLayer_%d' % (li)))
 
@@ -257,7 +258,6 @@ class pReLU(SameShape):
             self.alpha = tf.Variable(tf.zeros(x.get_shape()[-1], dtype=tf.float32))
         pos = tf.nn.relu(x)
         neg = self.alpha * (x - abs(x)) * 0.5
-        super(pReLU, self).__call__(x)
         return pos + neg
 
 
