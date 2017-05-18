@@ -39,11 +39,11 @@ class Module(object):
 
 class SameShape(Module):
     """a module where what comes out is same shape as what went in"""
-    def __call__(self, x):
+    def __call__(self, x, **kwargs):
         self.input_rank = rank(x)
         self.input_shape = x.get_shape()
         self.output_shape = x.get_shape()
-        return super(SameShape, self).__call__(x)
+        return super(SameShape, self).__call__(x, **kwargs)
 
 
 class Linear(Module):
@@ -159,9 +159,9 @@ class FCLayer(Module):
             self.n_in = static_size(x, 1)
 
         preact = self.linear(x)
-        bn_preact = self.batch_norm(preact) if self.bn else None
+        bn_preact = self.batch_norm(preact, train_flag=train_flag) if self.bn else None
         act = self.act_fn(bn_preact) if self.bn else self.act_fn(preact)
-        dropped = self.dropout(act) if self.drop else None
+        dropped = self.dropout(act, train_flag=train_flag) if self.drop else None
 
         out = dropped if self.drop else act
         out.preact = preact
@@ -181,11 +181,11 @@ class Stack(Module):
             [self.add(layer) for layer in layers]
 
     # FIXME: need a better abstraction of passing multiple inputs to this thing
-    def _call(self, x, train_flag=train_flag):
+    def _call(self, x, **kwargs):
         hid = []
         out = x
         for layer in self.layers:
-            out = layer(out, train_flag=train_flag)
+            out = layer(out, **kwargs)
             hid.append(out)
         out.hid = hid[:-1]
         return out
@@ -195,7 +195,7 @@ class Stack(Module):
 
 
 class MLP(Stack):
-    def __init__(self, sizes, act_fn=tf.nn.relu, bn=False, p_drop=None, readout=True, train_flag=train_flag, name='MLP'):
+    def __init__(self, sizes, act_fn=tf.nn.relu, bn=False, p_drop=None, readout=True, name='MLP'):
         super(MLP, self).__init__(name=name)
 
         self.n_layer = len(sizes)
@@ -242,7 +242,7 @@ class lReLU(SameShape):
 
     def _call(self, x):
         pos = tf.nn.relu(x)
-        neg = alphas * (x - abs(x)) * 0.5
+        neg = self.alpha * (x - abs(x)) * 0.5
         return pos + neg
 
 
