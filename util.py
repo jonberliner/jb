@@ -48,31 +48,6 @@ def cartesian1(arrays):
 coord_grid = lambda dim, res: cartesian1([np.linspace(-1,1,res)]*dim)
 
 
-def quick_mnist(ch_dim=False, whiten=True):
-    from tensorflow.examples.tutorials.mnist import input_data
-    mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-
-    train_x = mnist.train.images
-    test_x = mnist.test.images
-
-    train_y = mnist.train.labels
-    test_y = mnist.test.labels
-
-    # whiten
-    if whiten:
-        mu = np.mean(train_x)
-        sd = np.std(train_x)
-        train_x = (train_x - mu) / sd
-        test_x = (test_x - mu) / sd
-
-    # add channel dim
-    if ch_dim:
-        train_x = np.expand_dims(train_x, 2)
-        test_x = np.expand_dims(test_x, 2)
-
-    return train_x, train_y, test_x, test_y
-
-
 def prob_invert(x, p=0.5):
     assert x.max() <= 1., 'expects binary input'
     assert x.min() >= 0., 'expects binary input'
@@ -205,3 +180,70 @@ def mkdir_recursive(path):
         mkdir_recursive(sub_path)
     if not os.path.exists(path):
         os.mkdir(path)
+
+
+def get_mnist(classes=None, n_per=None, n_per_test=None, onehot_label=True, seed=None, data_dir=''):
+    classes = classes or np.arange(10).tolist()
+    n_class = len(classes)
+    for li in classes:
+        assert li in np.arange(10)
+
+    if n_per:
+        if type(n_per) == list:
+            assert len(n_per) == n_class
+        else:
+            n_per = [n_per]*n_class
+    if n_per_test:
+        if type(n_per_test) == list:
+            assert len(n_per_test) == n_class
+        else:
+            n_per_test = [n_per_test] * n_class
+
+    from tensorflow.examples.tutorials.mnist import input_data
+    seed = seed or np.random.randint(1e8)
+    rng = np.random.RandomState(seed)
+    mnist = input_data.read_data_sets(os.path.join(data_dir, "MNIST_data/"), one_hot=False)
+    dat = Bunch()
+    dat.train = Bunch()
+    dat.test = Bunch()
+    dat.seed = seed
+
+
+    dat.train.images = [None] * n_class
+    dat.test.images = [None] * n_class
+    dat.train.labels = [None] * n_class
+    dat.test.labels = [None] * n_class
+    for li, lab in enumerate(classes):
+        i_train = np.where(mnist.train.labels == lab)[0]
+        i_test = np.where(mnist.test.labels == lab)[0]
+        dat.train.images[li] = mnist.train.images[i_train]
+        dat.train.labels[li] = mnist.train.labels[i_train]
+        dat.test.images[li] = mnist.test.images[i_test]
+        dat.test.labels[li] = mnist.test.labels[i_test]
+
+        if n_per:
+            i_lab = rng.choice(dat.train.images[li].shape[0], n_per[li], replace=False)
+            dat.train.images[li] = dat.train.images[li][i_lab]
+            dat.train.labels[li] = dat.train.labels[li][i_lab]
+
+        if n_per_test:
+            i_lab = rng.choice(dat.test.images[li].shape[0], n_per_test[li], replace=False)
+            dat.test.images[li] = dat.test.images[li][i_lab]
+            dat.test.labels[li] = dat.test.labels[li][i_lab]
+
+    dat.train.images = np.concatenate(dat.train.images, 0)
+    dat.train.labels = np.concatenate(dat.train.labels, 0)
+    dat.test.images = np.concatenate(dat.test.images, 0)
+    dat.test.labels = np.concatenate(dat.test.labels, 0)
+    dat.train.num_examples = dat.train.images.shape[0]
+    dat.test.num_examples = dat.test.images.shape[0]
+
+    if onehot_label:
+        # TODO: should we leave as 10 classes or shrink?
+        dat.train.labels = onehot(10, dat.train.labels)
+        dat.test.labels = onehot(10, dat.test.labels)
+
+    return dat
+
+
+
