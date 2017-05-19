@@ -3,6 +3,9 @@ from tensorflow.contrib.distributions import Normal, kl
 import numpy as np
 import pdb
 
+# graph = tf.Graph()
+# with graph.as_default():
+#     train_flag = tf.placeholder(tf.bool, name='jb_train_flag')
 train_flag = tf.placeholder(tf.bool, name='jb_train_flag')
 
 def ph(shape, dtype=tf.float32, name=None):
@@ -72,12 +75,19 @@ class Linear(Module):
         return out
 
 
+def _assign_moving_average(orig_val, new_val, decay, name='_assign_moving_average'):
+    with tf.name_scope(name):
+        td = decay * (new_val - orig_val)
+        return tf.assign_add(orig_val, td)
+
+
 class BatchNorm(SameShape):
-    def __init__(self, beta_trainable=True, gamma_trainable=True, name='BatchNorm'):
+    def __init__(self, beta_trainable=True, gamma_trainable=True, decay=0.5, eps=1e-3, name='BatchNorm'):
         """
-            n_out:       integer, depth of input maps
-            input_rank:  rank of input x
-            phase_train: boolean tf.Varialbe, true indicates training phase
+            beta_trainable: bool, learnable means
+            gamma_trainable: bool, learnable vars
+            decay: scalar in (0., 1.), how fast moving average updates (bigger is faster)
+            eps: scalar in (0., inf), stability term for batch var
             name:       string, variable scope
         Return:
             normed:      batch-normalized maps
@@ -86,6 +96,8 @@ class BatchNorm(SameShape):
 
         self.beta_trainable = beta_trainable
         self.gamma_trainable = gamma_trainable
+        self.decay = decay
+        self.eps = eps
 
     def _call(self, x, train_flag=train_flag):
         if self.called:
@@ -94,28 +106,31 @@ class BatchNorm(SameShape):
         else:
             self.pool_axes = np.arange(self.input_rank-1).tolist()
             self.n_out = static_size(x, -1)
+            self.moving_mean = tf.Variable(tf.constant(0.0, shape=[self.n_out]),
+                                        name='moving_mean', trainable=False)
+            self.moving_var = tf.Variable(tf.constant(1.0, shape=[self.n_out]),
+                                        name='moving_var', trainable=False)
+
             self.beta = tf.Variable(tf.constant(0.0, shape=[self.n_out]),
                                         name='beta', trainable=self.beta_trainable)
             self.gamma = tf.Variable(tf.constant(1.0, shape=[self.n_out]),
                                         name='gamma', trainable=self.gamma_trainable)
 
+
         batch_mean, batch_var = tf.nn.moments(x, self.pool_axes, name='moments')
-        ema = tf.train.ExponentialMovingAverage(decay=0.5)
+        def training():
+            update_mm = _assign_moving_average(self.moving_mean, batch_mean, self.decay)
+            update_mv = _assign_moving_average(self.moving_var, batch_var, self.decay)
+            with tf.control_dependencies([update_mm, update_mv]):
+                return tf.nn.batch_normalization(x, batch_mean, batch_var, self.beta, self.gamma, self.eps)
 
-        def mean_var_with_update():
-            ema_apply_op = ema.apply([batch_mean, batch_var])
-            with tf.control_dependencies([ema_apply_op]):
-                return tf.identity(batch_mean), tf.identity(batch_var)
+        def testing():
+            return tf.nn.batch_normalization(x, self.moving_mean, self.moving_var, self.beta, self.gamma, self.eps)
 
-        mean, var = tf.cond(train_flag,
-                            mean_var_with_update,
-                            lambda: (ema.average(batch_mean), ema.average(batch_var)))
-        normed = tf.nn.batch_normalization(x, mean, var, self.beta, self.gamma, 1e-3)
+        normed = tf.cond(train_flag, training, testing)
 
         normed.batch_mean = batch_mean
         normed.batch_var = batch_var
-        normed.mean = mean
-        normed.var = var
         return normed
 
 
