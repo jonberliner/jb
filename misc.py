@@ -1,20 +1,8 @@
 from __future__ import print_function
-import modules as jbm
 import tensorflow as tf
 import numpy as np
-import util as jbu
-
-
-def test_model(x, train_flag_ph):
-    DX = 784
-    DY = 10
-    layer1 = jbm.fc_layer(DX, 256, jbm.prelu, True, 0.8, train_flag_ph)
-    layer2 = jbm.fc_layer(256, DY, tf.identity, False, False, train_flag_ph)
-
-    hid = layer1(x)
-    yhat_logit = layer2(hid)
-
-    return yhat_logit
+import jb.util as jbu
+import jb.modules as jbm
 
 
 def test_over_mnist(model, train_flag_ph=None, linear_read_in=False, linear_read_out=False):
@@ -29,11 +17,12 @@ def test_over_mnist(model, train_flag_ph=None, linear_read_in=False, linear_read
     DX = dat.train.images.shape[1]
     DY = dat.train.labels.shape[1]
 
-    if train_flag_ph is None: 
+    if train_flag_ph is None:
         train_flag_ph = tf.placeholder(tf.bool)
     x_ph = tf.placeholder(tf.float32, (None, DX))
     y_ph = tf.placeholder(tf.float32, (None, DY))
 
+    # FIXME: no good train flag solution yet
     yhat_logit = model(x_ph, train_flag_ph)
     yhat = tf.nn.softmax(yhat_logit)
 
@@ -91,7 +80,7 @@ def test_over_mnist(model, train_flag_ph=None, linear_read_in=False, linear_read
         print('%s loss step %d: %03f' % (name, i_step, l0))
 
 
-    with tf.Session() as sess:
+    with jbm.sess() as sess:
         tf.global_variables_initializer().run()
         for i_step in range(N_STEP):
             if i_step % TEST_EVERY == 0:
@@ -101,4 +90,9 @@ def test_over_mnist(model, train_flag_ph=None, linear_read_in=False, linear_read
 
 
 if __name__ == '__main__':
+    def test_model(x, train_flag_ph):
+        DY = 10
+        model = jbm.MLP([256, 256, DY], bn=True, p_drop=0.2)
+        return yhat_logit
+
     test_over_mnist(test_model)

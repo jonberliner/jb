@@ -8,6 +8,12 @@ import pdb
 #     train_flag = tf.placeholder(tf.bool, name='jb_train_flag')
 train_flag = tf.placeholder(tf.bool, name='jb_train_flag')
 
+def sess():
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth=True
+    return tf.Session(config=config)
+
+
 def ph(shape, dtype=tf.float32, name=None):
     return tf.placeholder(dtype=dtype, shape=shape, name=name)
 
@@ -174,6 +180,84 @@ class FCLayer(Module):
             self.n_in = static_size(x, 1)
 
         preact = self.linear(x)
+        bn_preact = self.batch_norm(preact, train_flag=train_flag) if self.bn else None
+        act = self.act_fn(bn_preact) if self.bn else self.act_fn(preact)
+        dropped = self.dropout(act, train_flag=train_flag) if self.drop else None
+
+        out = dropped if self.drop else act
+        out.preact = preact
+        out.bn_preact = bn_preact
+        out.act = act
+        out.dropped = dropped
+
+        return out
+
+
+class Conv2D(Module):
+    # TODO: decide if we want to break into containers, stacks, etc
+    def __init__(self, n_out, hw, stride=None, padding='SAME', W_init='mrsa', name='Conv2D'):
+        super(Conv2D, self).__init__(name)
+        self.n_out = n_out
+        self.n_in = None
+        self.output_shape = (None, None, None, n_out)
+        self.W_init = W_init
+        self.padding = padding
+        if type(hw) != list: hw = [hw]*2
+        assert len(hw) == 2
+        self.hw = hw
+        self.kh =  hw[0]
+        self.kw =  hw[1]
+        if type(stride) != list: stride = [stride]*2
+        stride = stride or [1, 1]
+        assert len(stride) == 2
+        self.stride = stride
+        self.padding = padding
+
+    def _call(self, x):
+        if self.called:
+            assert rank(x) == self.input_rank
+            assert static_size(x, 1) == self.n_in
+        else:
+            self.input_shape = x.get_shape()
+            self.n_in = static_size(x, 1)
+            if self.W_init == 'msra':
+                W0 = tf.random_normal([self.kh, self.kw, self.n_in, self.n_out]) *\
+                                     (tf.sqrt(2. / (self.n_in*self.kh*self.kw)))
+            else:
+                raise ValueError('W_init must be in ["msra"]')
+            self.W = tf.Variable(W0, name='W')
+            self.b = tf.Variable(tf.zeros([self.n_out]), name='b')
+
+        return tf.nn.conv2d(x, self.W, self.strides, self.padding) + self.b
+
+
+class Conv2DLayer(Module):
+    # TODO: decide if we want to break into containers, stacks, etc
+    def __init__(self, n_out, kh, kw, stride, padding='SAME', W_init='mrsa', act_fn=tf.nn.relu, bn=False, p_drop=False, name='Conv2DLayer'):
+        super(Conv2DLayer, self).__init__(name)
+
+        with tf.name_scope(self.name) as scope:
+            self.n_out = n_out
+
+            self.bn = bn
+            self.p_drop = p_drop
+            self.drop = p_drop is not None
+
+            self.conv2d = Conv2D(n_out, kh, kw, stride, padding, W_init)
+            self.batch_norm = BatchNorm() if self.bn else None
+            self.act_fn = act_fn
+            self.dropout = Dropout(p_drop) if self.drop else None
+
+    def _call(self, x, train_flag=train_flag):
+        if self.called:
+            assert rank(x) == self.input_rank
+            assert static_size(x, 1) == self.n_in
+        else:
+            self.input_rank = rank(x)
+            self.input_shape = x.get_shape()
+            self.n_in = static_size(x, 1)
+
+        preact = self.conv2d(x)
         bn_preact = self.batch_norm(preact, train_flag=train_flag) if self.bn else None
         act = self.act_fn(bn_preact) if self.bn else self.act_fn(preact)
         dropped = self.dropout(act, train_flag=train_flag) if self.drop else None
