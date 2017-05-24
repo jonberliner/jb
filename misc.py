@@ -4,16 +4,11 @@ import numpy as np
 import jb.util as jbu
 import jb.modules as jbm
 
-
-def test_over_mnist(model, train_flag_ph=None, linear_read_in=False, linear_read_out=False):
+def test_over_data(dat, model, train_flag_ph=None, BS=64, LR=1e-3, linear_read_in=False, linear_read_out=False):
     # TODO: make read in/out magic available
     assert linear_read_in == False
     assert linear_read_out == False
 
-    from tensorflow.examples.tutorials.mnist import input_data
-    seed = None
-    rng = np.random.RandomState(seed)
-    dat = input_data.read_data_sets("MNIST_data/", one_hot=True)
     DX = dat.train.images.shape[1]
     DY = dat.train.labels.shape[1]
 
@@ -29,10 +24,10 @@ def test_over_mnist(model, train_flag_ph=None, linear_read_in=False, linear_read
     losses = tf.nn.softmax_cross_entropy_with_logits(logits=yhat_logit, labels=y_ph)
     loss = tf.reduce_sum(losses)
 
-    trainer = tf.train.AdamOptimizer(1e-3).minimize(loss)
+    trainer = tf.train.AdamOptimizer(LR).minimize(loss)
 
     # start training
-    BS = 64
+    # BS = 64
     batcher = jbu.Batcher(dat.train.num_examples, BS)
 
     N_STEP = int(1e3)
@@ -89,10 +84,16 @@ def test_over_mnist(model, train_flag_ph=None, linear_read_in=False, linear_read
             train(sess, dat.train, batcher)
 
 
+def test_over_mnist(model, train_flag_ph=None, BS=64, LR=1e-3, linear_read_in=False, linear_read_out=False):
+    from tensorflow.examples.tutorials.mnist import input_data
+    dat = input_data.read_data_sets("MNIST_data/", one_hot=True)
+    return test_over_data(dat, model, train_flag_ph, BS, LR, linear_read_in, linear_read_out)
+
+
 if __name__ == '__main__':
-    def test_model(x, train_flag_ph):
+    def test_model(x, train_flag=jbm.train_flag):
         DY = 10
         model = jbm.MLP([256, 256, DY], bn=True, p_drop=0.2)
-        return yhat_logit
+        return model(x, train_flag=train_flag)
 
     test_over_mnist(test_model)
