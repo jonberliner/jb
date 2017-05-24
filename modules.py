@@ -13,6 +13,11 @@ def sess():
     config.gpu_options.allow_growth=True
     return tf.Session(config=config)
 
+def isess():
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth=True
+    return tf.InteractiveSession(config=config)
+
 
 def ph(shape, dtype=tf.float32, name=None):
     return tf.placeholder(dtype=dtype, shape=shape, name=name)
