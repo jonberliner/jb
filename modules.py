@@ -93,10 +93,10 @@ def _assign_moving_average(orig_val, new_val, decay, name='_assign_moving_averag
 
 
 class BatchNorm(SameShape):
-    def __init__(self, beta_trainable=True, gamma_trainable=True, decay=0.5, eps=1e-3, name='BatchNorm'):
+    def __init__(self, loc_trainable=True, scale_trainable=True, decay=0.5, eps=1e-3, add_noise=False, name='BatchNorm'):
         """
-            beta_trainable: bool, learnable means
-            gamma_trainable: bool, learnable vars
+            loc_trainable: bool, learnable means
+            scale_trainable: bool, learnable vars
             decay: scalar in (0., 1.), how fast moving average updates (bigger is faster)
             eps: scalar in (0., inf), stability term for batch var
             name:       string, variable scope
@@ -105,10 +105,11 @@ class BatchNorm(SameShape):
         """
         super(BatchNorm, self).__init__(name)
 
-        self.beta_trainable = beta_trainable
-        self.gamma_trainable = gamma_trainable
+        self.loc_trainable = loc_trainable
+        self.scale_trainable = scale_trainable
         self.decay = decay
         self.eps = eps
+        self.add_noise = add_noise
 
     def _call(self, x, train_flag=train_flag):
         if self.called:
@@ -122,10 +123,10 @@ class BatchNorm(SameShape):
             self.moving_var = tf.Variable(tf.constant(1.0, shape=[self.n_out]),
                                         name='moving_var', trainable=False)
 
-            self.beta = tf.Variable(tf.constant(0.0, shape=[self.n_out]),
-                                        name='beta', trainable=self.beta_trainable)
-            self.gamma = tf.Variable(tf.constant(1.0, shape=[self.n_out]),
-                                        name='gamma', trainable=self.gamma_trainable)
+            self.loc = tf.Variable(tf.constant(0.0, shape=[self.n_out]),
+                                        name='beta', trainable=self.loc_trainable)
+            self.scale = tf.nn.softplus(tf.Variable(tf.constant(1.0, shape=[self.n_out]),
+                                            name='gamma', trainable=self.scale_trainable))
 
 
         batch_mean, batch_var = tf.nn.moments(x, self.pool_axes, name='moments')
@@ -133,10 +134,13 @@ class BatchNorm(SameShape):
             update_mm = _assign_moving_average(self.moving_mean, batch_mean, self.decay)
             update_mv = _assign_moving_average(self.moving_var, batch_var, self.decay)
             with tf.control_dependencies([update_mm, update_mv]):
-                return tf.nn.batch_normalization(x, batch_mean, batch_var, self.beta, self.gamma, self.eps)
+                normed = tf.nn.batch_normalization(x, batch_mean, batch_var, self.loc, self.scale, self.eps)
+                if self.add_noise:
+                    normed += Normal(self.loc, self.scale).sample(tf.shape(normed)[0])
+                return normed
 
         def testing():
-            return tf.nn.batch_normalization(x, self.moving_mean, self.moving_var, self.beta, self.gamma, self.eps)
+            return tf.nn.batch_normalization(x, self.moving_mean, self.moving_var, self.loc, self.scale, self.eps)
 
         normed = tf.cond(train_flag, training, testing)
 
@@ -161,17 +165,18 @@ class Dropout(SameShape):
 
 class FCLayer(Module):
     # TODO: decide if we want to break into containers, stacks, etc
-    def __init__(self, n_out, act_fn=tf.nn.relu, bn=False, p_drop=False, name='FCLayer'):
+    def __init__(self, n_out, act_fn=tf.nn.relu, bn=False, p_drop=False, bn_noise=False, name='FCLayer'):
         super(FCLayer, self).__init__(name)
 
         with tf.name_scope(self.name) as scope:
             self.n_out = n_out
             self.bn = bn
+            self.bn_noise = bn_noise
             self.p_drop = p_drop
             self.drop = p_drop is not None
 
             self.linear = Linear(n_out)
-            self.batch_norm = BatchNorm() if self.bn else None
+            self.batch_norm = BatchNorm(add_noise=self.bn_noise) if self.bn else None
             self.act_fn = act_fn
             self.dropout = Dropout(p_drop) if self.drop else None
 
@@ -299,7 +304,7 @@ class Stack(Module):
 
 
 class MLP(Stack):
-    def __init__(self, sizes, act_fn=tf.nn.relu, bn=False, p_drop=None, readout=True, name='MLP'):
+    def __init__(self, sizes, act_fn=tf.nn.relu, bn=False, bn_noise=False, p_drop=None, readout=True, name='MLP'):
         super(MLP, self).__init__(name=name)
 
         self.n_layer = len(sizes)
@@ -324,6 +329,11 @@ class MLP(Stack):
             if self.readout: bn[-1] = False
         self.bn = bn
 
+        if type(bn_noise) != list:
+            bn_noise = [bn_noise] * self.n_layer
+            if self.readout: bn_noise[-1] = False
+        self.bn_noise = bn_noise
+
         if type(p_drop) != list:
             p_drop = [p_drop] * self.n_layer
             if self.readout: p_drop[-1] = None
@@ -335,6 +345,7 @@ class MLP(Stack):
                                 self.act_fn[li],
                                 self.bn[li],
                                 self.p_drop[li],
+                                self.bn_noise[li],
                                 name='FCLayer_%d' % (li)))
 
 
