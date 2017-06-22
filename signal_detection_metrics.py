@@ -1,8 +1,9 @@
 import tensorflow as tf
 
 def yhat_positive(logits=None, probs=None, crit=0.5):
-    if logits: assert not probs
-    if probs: assert not logits
+    assert not (logits is None and probs is None)
+    if logits is not None: assert not probs
+    if probs is not None: assert not logits
     if logits is not None:
         probs = tf.nn.sigmoid(logits)
     return probs > crit
