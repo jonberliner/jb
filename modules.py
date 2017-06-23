@@ -33,6 +33,23 @@ def static_size(x, d):
     return out
 
 
+def tf_repeat(tensor, n):
+    """behaves like np.repeat, except only runs over the leading dimension n times"""
+    out = tf.transpose(tensor)
+    rr = rank(tensor)
+    tile_size = [n] + [1]*(rr-1)
+    out = tf.tile(out, tile_size)
+
+    out = tf.transpose(out)
+    reshape_size = tf.concat([[-1], tf.shape(tensor)[1:]], axis=0)
+    out = tf.reshape(out, reshape_size)
+
+    # out = tf.reshape(
+    #            tf.transpose(tf.tile(tf.transpose(tensor), tf.stack([n, 1]))),
+    #            tf.stack([-1, tf.shape(tensor)[1]]))
+    return out
+
+
 class Module(object):
     def __init__(self, name, *args, **kwargs):
         self.name = name
@@ -347,6 +364,68 @@ class MLP(Stack):
                                 self.p_drop[li],
                                 self.bn_noise[li],
                                 name='FCLayer_%d' % (li)))
+
+
+class Cartesian(Module):
+    def __init__(self, reverse_order=False, name='Cartesian'):
+        super(Cartesian, self).__init__(name)
+        self.reverse_order = reverse_order
+
+    def _call(self, s0=None, s1=None):
+        assert (s0 is not None) or (s1 is not None), 's0 and s1 cannot both be None'
+        if s1 is None and s0 is None:
+            return None
+        elif s1 is None:
+            return s0
+        elif s0 is None:
+            return s1
+        else:
+            # TODO: should be able to work with any rank
+            assert rank(s0) <= 2, 'currently, both sets must be rank <= 2'
+            assert rank(s1) <= 2, 'currently, both sets must be rank <= 2'
+            ns0 = tf.shape(s0)[0]
+            ns1 = tf.shape(s1)[0]
+            assert rank(s0) == rank(s1), 's0 and s1 must be same rank'
+            sets_rank = rank(s0)
+
+            if sets_rank == 0:
+                return tf.expand_dims(tf.stack([s0, s1]), 1)
+
+            if sets_rank == 1:
+                s0 = tf.expand_dims(s0, 1)
+                s1 = tf.expand_dims(s1, 1)
+                sets_rank += 1
+
+            if self.reverse_order:
+                s0_tile_size = [ns1] + [1]*(sets_rank-1)
+                rs0 = tf.tile(s0, s0_tile_size)
+                rs1 = tf_repeat(s1, ns0)
+            else:
+                rs0 = tf_repeat(s0, ns1)
+                s1_tile_size = [ns0] + [1]*(sets_rank-1)
+                rs1 = tf.tile(s1, s1_tile_size)
+
+            out = tf.concat([rs0, rs1], 1)
+            ds0 = static_size(s0, 1)
+            ds1 = static_size(s1,1)
+            out.set_shape([None] + [ds0+ds1])
+            return out
+
+# def tf_repeat(tensor, n):
+#     """behaves like np.repeat, except only runs over the leading dimension n times"""
+#     out = tf.transpose(tensor)
+#     rr = rank(tensor)
+#     tile_size = [n] + [1]*(rr-1)
+#     out = tf.tile(out, tile_size)
+
+#     out = tf.transpose(out)
+#     reshape_size = tf.concat([[-1], tf.shape(tensor)[1:]], axis=0)
+#     out = tf.reshape(out, reshape_size)
+
+#     # out = tf.reshape(
+#     #            tf.transpose(tf.tile(tf.transpose(tensor), tf.stack([n, 1]))),
+#     #            tf.stack([-1, tf.shape(tensor)[1]]))
+#     return out
 
 
 class lReLU(SameShape):
