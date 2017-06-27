@@ -182,7 +182,7 @@ def mkdir_recursive(path):
         os.mkdir(path)
 
 
-def get_mnist(classes=None, n_per=None, n_per_test=None, onehot_label=True, seed=None, data_dir=''):
+def get_mnist(classes=None, n_per_class=None, n_per_test=None, onehot_label=True, seed=None, data_dir=''):
     classes = classes or np.arange(10).tolist()
     n_class = len(classes)
     for li in classes:
