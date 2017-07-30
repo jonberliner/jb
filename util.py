@@ -7,6 +7,7 @@ import pdb
 
 
 class Bunch(dict):
+    """dicts with dot notation access"""
     def __init__(self, *args, **kwds):
         super(Bunch, self).__init__(*args, **kwds)
         self.__dict__ = self

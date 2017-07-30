@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.contrib.distributions import Normal, kl
+from tensorflow.contrib.distributions import Normal
 import numpy as np
 import pdb
 
@@ -50,6 +50,12 @@ def tf_repeat(tensor, n):
     return out
 
 
+def logit(probs, eps=None):
+    if eps is not None:
+        probs = tf.clip_by_value(probs, eps, 1.-eps)
+        return -tf.log((1./probs) - 1.)
+
+
 class Module(object):
     def __init__(self, name, *args, **kwargs):
         self.name = name
@@ -96,8 +102,8 @@ class Linear(Module):
                 W0 = tf.random_normal([self.n_in, self.n_out]) * (tf.sqrt(2. / self.n_in))
             else:
                 raise ValueError('W_init must be in ["msra"]')
-            self.W = tf.Variable(W0, name='W')
-            self.b = tf.Variable(tf.zeros([self.n_out]), name='b')
+            self.W = tf.get_variable(name='W', shape=[self.n_in, self.n_out], initializer=tf.constant_initializer(W0))
+            self.b = tf.get_variable(name='b', shape=[self.n_out], initializer=tf.constant_initializer(tf.zeros([self.n_out])))
 
         out = tf.matmul(x, self.W) + self.b
         return out
